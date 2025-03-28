@@ -285,7 +285,7 @@ void GazeboRosOusterLaser::OnScan(ConstLaserScanStampedPtr& _msg) {
   const double MAX_RANGE = std::min(max_range_, maxRange);
 
   // Populate message fields
-  const uint32_t POINT_STEP = 32;
+  const uint32_t POINT_STEP = 48;
   sensor_msgs::PointCloud2 msg;
   msg.header.frame_id = frame_name_;
   msg.header.stamp = ros::Time(_msg->time().sec(), _msg->time().nsec());
@@ -396,12 +396,12 @@ void GazeboRosOusterLaser::OnScan(ConstLaserScanStampedPtr& _msg) {
 
   // Populate message with number of valid points
   msg.point_step = POINT_STEP;
-  msg.row_step = (uint32_t)(ptr - msg.data.data());
-  msg.height = 1;
-  msg.width = msg.row_step / POINT_STEP;
+  msg.row_step = (uint32_t)(POINT_STEP * rangeCount);
+  msg.height = verticalRangeCount;
+  msg.width = rangeCount;
   msg.is_bigendian = false;
-  msg.is_dense = true;
-  msg.data.resize(msg.row_step);  // Shrink to actual size
+  msg.is_dense = false;
+  msg.data.resize(verticalRangeCount * msg.row_step);  // Shrink to actual size
 
   // Publish output
   pub_.publish(msg);
