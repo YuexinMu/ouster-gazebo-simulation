@@ -289,7 +289,7 @@ void GazeboRosOusterLaser::OnScan(ConstLaserScanStampedPtr& _msg) {
   sensor_msgs::PointCloud2 msg;
   msg.header.frame_id = frame_name_;
   msg.header.stamp = ros::Time(_msg->time().sec(), _msg->time().nsec());
-  msg.fields.resize(5);
+  msg.fields.resize(9);
   msg.fields[0].name = "x";
   msg.fields[0].offset = 0;
   msg.fields[0].datatype = sensor_msgs::PointField::FLOAT32;
@@ -306,11 +306,35 @@ void GazeboRosOusterLaser::OnScan(ConstLaserScanStampedPtr& _msg) {
   msg.fields[3].offset = 16;
   msg.fields[3].datatype = sensor_msgs::PointField::FLOAT32;
   msg.fields[3].count = 1;
-  msg.fields[4].name = "ring";
+  msg.fields[4].name = "t";
   msg.fields[4].offset = 20;
-  msg.fields[4].datatype = sensor_msgs::PointField::UINT16;
+  msg.fields[4].datatype = sensor_msgs::PointField::UINT32;
   msg.fields[4].count = 1;
+
+  msg.fields[5].name = "reflectivity";
+  msg.fields[5].offset = 24;
+  msg.fields[5].datatype = sensor_msgs::PointField::UINT16;
+  msg.fields[5].count = 1;
+
+  msg.fields[6].name = "ring";
+  msg.fields[6].offset = 26;
+  msg.fields[6].datatype = sensor_msgs::PointField::UINT16;
+  msg.fields[6].count = 1;
+
+  msg.fields[7].name = "ambient";
+  msg.fields[7].offset = 28;
+  msg.fields[7].datatype = sensor_msgs::PointField::UINT16;
+  msg.fields[7].count = 1;
+
+  msg.fields[8].name = "range";
+  msg.fields[8].offset = 32;
+  msg.fields[8].datatype = sensor_msgs::PointField::UINT32;
+  msg.fields[8].count = 1;
+
   msg.data.resize(verticalRangeCount * rangeCount * POINT_STEP);
+
+  double t_start = _msg->time().sec() * 1e3 + _msg->time().nsec() / 1000000;
+  double scan_duration_ms = 100;
 
   int i, j;
   uint8_t* ptr = msg.data.data();
@@ -318,6 +342,8 @@ void GazeboRosOusterLaser::OnScan(ConstLaserScanStampedPtr& _msg) {
     for (j = 0; j < verticalRangeCount; j++) {
       // Range
       double r = _msg->scan().ranges(i + j * rangeCount);
+      // current point index
+      int point_index = i + j * rangeCount;
 
       // Noise
       if (gaussian_noise_ > 0.0) {  // shouldn't it be compared to epsilon ?
@@ -338,6 +364,10 @@ void GazeboRosOusterLaser::OnScan(ConstLaserScanStampedPtr& _msg) {
 
       // Intensity
       double intensity = _msg->scan().intensities(i + j * rangeCount);
+      // t
+      uint32_t t_value = static_cast<uint32_t>(t_start + (point_index / (double)(rangeCount * verticalRangeCount)) * scan_duration_ms);
+      // rang
+      double rang = _msg->scan().ranges(point_index);
 
       // Get angles of ray to get xyz for point
       double yAngle;
@@ -365,11 +395,15 @@ void GazeboRosOusterLaser::OnScan(ConstLaserScanStampedPtr& _msg) {
 #else
         *((float*)(ptr + 8)) = (float)(-r * sin(pAngle));  // z
 #endif
+
         *((float*)(ptr + 16)) = (float)intensity;  // I
+        *((uint32_t*)(ptr + 20)) = (uint32_t)t_value;  // t
+
 #if GAZEBO_MAJOR_VERSION > 2
-        *((uint16_t*)(ptr + 20)) = (uint16_t)j;  // ring
+        *((uint16_t*)(ptr + 26)) = (uint16_t)j;  // ring
+        *((uint32_t*)(ptr + 32)) = (uint32_t)rang;  // range
 #else
-        *((uint16_t*)(ptr + 20)) =
+        *((uint16_t*)(ptr + 26)) =
             (uint16_t)verticalRangeCount - 1 - j;  // ring
 #endif
         ptr += POINT_STEP;
@@ -383,10 +417,11 @@ void GazeboRosOusterLaser::OnScan(ConstLaserScanStampedPtr& _msg) {
         *((float*)(ptr + 8)) = 0.;                 // z
 #endif
         *((float*)(ptr + 16)) = 0.;  // I
+        *((uint32_t*)(ptr + 20)) = (uint32_t)t_value;  // I
 #if GAZEBO_MAJOR_VERSION > 2
-        *((uint16_t*)(ptr + 20)) = (uint16_t)j;  // ring
+        *((uint16_t*)(ptr + 16)) = (uint16_t)j;  // ring
 #else
-        *((uint16_t*)(ptr + 20)) =
+        *((uint16_t*)(ptr + 26)) =
             (uint16_t)(verticalRangeCount - 1 - j);  // ring
 #endif
         ptr += POINT_STEP;
